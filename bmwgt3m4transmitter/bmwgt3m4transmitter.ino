@@ -1,65 +1,105 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-// YOUR CAR'S MAC ADDRESS
+// MAC Address of the receiver
 uint8_t broadcastAddress[] = {0xD4, 0xE9, 0xF4, 0xB3, 0x57, 0x14};
 
-// Pin definitions for your controller
-const int steeringPin = 34; // Potentiometer
-const int throttlePin = 35; // Potentiometer or Trigger
-const int lightPin = 23;    // Button for headlights
+const int steeringPin = 34;
+const int throttlePin = 35;
+const int modeButton = 4;
+const int lightButton = 23; 
 
-// The exact structure matching the receiver
 typedef struct struct_message {
   int steering;
   int throttle;
-  int headlight;
+  int driveMode;
+  bool headlights;
+  bool reverseLights;
 } struct_message;
 
 struct_message myData;
 esp_now_peer_info_t peerInfo;
 
-// Callback function for ESP32 Core 3.x
-void OnDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
-  Serial.print("\r\nPacket Send Status:\t");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-}
+int currentMode = 0; 
+bool headLightsOn = false;
+bool lastLightButtonState = HIGH;
+
+// Safety variables for double-press logic
+int lastModeButtonState = HIGH;
+unsigned long lastPressTime = 0;
+int pressCount = 0;
+unsigned long doublePressWindow = 400; 
 
 void setup() {
+  // Serial is kept for potential future use but is now passive
   Serial.begin(115200);
   WiFi.mode(WIFI_STA);
+  if (esp_now_init() != ESP_OK) return;
 
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-
-  esp_now_register_send_cb(OnDataSent);
-  
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;  
+  peerInfo.channel = 0;
   peerInfo.encrypt = false;
-  
-  if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
-    return;
-  }
-  
-  pinMode(lightPin, INPUT_PULLUP);
+  esp_now_add_peer(&peerInfo);
+
+  pinMode(modeButton, INPUT_PULLUP);
+  pinMode(lightButton, INPUT_PULLUP);
 }
 
 void loop() {
-  // Read inputs
-  int targetSteer = analogRead(steeringPin);
-  int targetSpeed = analogRead(throttlePin);
+  // Double-press safety logic for Mode Switching
+  int modeReading = digitalRead(modeButton);
+  if (modeReading == LOW && lastModeButtonState == HIGH) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastPressTime < doublePressWindow) {
+      pressCount++;
+    } else {
+      pressCount = 1;
+    }
+    lastPressTime = currentTime;
+  }
   
-  // Map values properly
-  myData.steering = map(targetSteer, 0, 4095, 0, 180);
-  myData.throttle = map(targetSpeed, 0, 4095, -255, 255); // Forward/Reverse
-  myData.headlight = !digitalRead(lightPin); // Active low button
+  if (pressCount >= 2) {
+    currentMode = (currentMode + 1) % 3;
+    pressCount = 0; 
+  }
+  lastModeButtonState = modeReading;
 
-  // Send the data package
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
-  
-  delay(50);
+  // Headlight toggle (Single press)
+  int lightReading = digitalRead(lightButton);
+  if (lightReading == LOW && lastLightButtonState == HIGH) {
+    headLightsOn = !headLightsOn;
+  }
+  lastLightButtonState = lightReading;
+
+  // Raw Inputs & Scaling
+  int rawSteer = analogRead(steeringPin);
+  int rawThrottle = analogRead(throttlePin);
+  int baseThrottle = map(rawThrottle, 0, 4095, -255, 255);
+
+  int finalSteering;
+  float throttleSF;
+
+  if (currentMode == 0) { // Racing
+    throttleSF = 1.0;
+    finalSteering = map(rawSteer, 0, 4095, 45, 135); 
+  } else if (currentMode == 1) { // Drifting
+    throttleSF = 1.0;
+    finalSteering = map(rawSteer, 0, 4095, 0, 180);
+  } else { // Cruise Control
+    throttleSF = 0.3;
+    finalSteering = map(rawSteer, 0, 4095, 70, 110);
+  }
+
+  // Populate data
+  myData.steering = finalSteering;
+  myData.throttle = (int)(baseThrottle * throttleSF);
+  myData.driveMode = currentMode;
+  myData.headlights = headLightsOn;
+  myData.reverseLights = (myData.throttle < -10);
+
+  // Send packet
+  esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
+
+  // Minimal delay to maintain stability without blocking transmission
+  delay(10);
 }
