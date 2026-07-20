@@ -9,13 +9,22 @@ static const char* _STREAM_BOUNDARY = "\r\n--123456789000000000000987654321\r\n"
 
 httpd_handle_t stream_httpd = NULL;
 
-// --- SCRIPT-FREE ACCELERATED 50/50 SPLIT ---
+// Shared volatile variables for thread-safe dynamic HUD updates
+volatile int hud_mode = 0;
+volatile bool hud_lights = false;
+
+void updateHUDState(int mode, bool lights) {
+    hud_mode = mode;
+    hud_lights = lights;
+}
+
+// --- ACCELERATED 50/50 SPLIT WITH LIVE HUD OVERLAY ---
 static const char PROGMEM INDEX_HTML[] = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ESP32-CAM Dual View</title>
+    <title>ESP32-CAM FPV VR Dual View</title>
     <style>
         * {
             box-sizing: border-box;
@@ -28,7 +37,6 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
             width: 100vw;
             height: 100vh;
         }
-        /* Lock grid container layout to landscape view proportions */
         .wrapper {
             display: flex;
             width: 100%;
@@ -42,27 +50,60 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
             justify-content: center;
             align-items: center;
             background-color: #000000;
+            position: relative;
         }
         .left-side {
-            border-right: 2px solid #111111; /* Center dividing guide line */
+            border-right: 2px solid #111111;
         }
         img {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Assures aspect ratio scaling inside VR lenses */
+            object-fit: contain;
+        }
+        .hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #00FFCC;
+            font-family: monospace;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #00FFCC;
+            z-index: 10;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
     <div class="wrapper">
         <div class="panel left-side">
+            <div class="hud" id="hudText">MODE: LOADING...</div>
             <img src="/stream">
         </div>
         
         <div class="panel">
+            <div class="hud" id="hudTextRight">MODE: LOADING...</div>
             <img src="/stream">
         </div>
     </div>
+
+    <script>
+        setInterval(() => {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    let modeStr = "RACING";
+                    if (data.mode === 1) modeStr = "DRIFT";
+                    if (data.mode === 2) modeStr = "CRUISE CONTROL";
+                    
+                    let text = `MODE: ${modeStr}<br>LIGHTS: ${data.lights ? 'ON' : 'OFF'}`;
+                    document.getElementById('hudText').innerHTML = text;
+                    document.getElementById('hudTextRight').innerHTML = text;
+                }).catch(err => {});
+        }, 500);
+    </script>
 </body>
 </html>
 )rawliteral";
@@ -70,6 +111,13 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
 static esp_err_t index_handler(httpd_req_t *req){
     httpd_resp_set_type(req, "text/html");
     return httpd_resp_send(req, INDEX_HTML, strlen(INDEX_HTML));
+}
+
+static esp_err_t status_handler(httpd_req_t *req){
+    char json_buffer[64];
+    snprintf(json_buffer, sizeof(json_buffer), "{\"mode\":%d,\"lights\":%s}", hud_mode, hud_lights ? "true" : "false");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, json_buffer, strlen(json_buffer));
 }
 
 static esp_err_t stream_handler(httpd_req_t *req){
@@ -88,7 +136,6 @@ static esp_err_t stream_handler(httpd_req_t *req){
     while(true){
         fb = esp_camera_fb_get();
         if (!fb) {
-            Serial.println("Camera capture failed");
             res = ESP_FAIL;
         } else {
             if(fb->format != PIXFORMAT_JPEG){
@@ -96,7 +143,6 @@ static esp_err_t stream_handler(httpd_req_t *req){
                 esp_camera_fb_return(fb);
                 fb = NULL;
                 if(!jpeg_converted){
-                    Serial.println("JPEG compression failed");
                     res = ESP_FAIL;
                 }
             } else {
@@ -141,6 +187,12 @@ void startCameraServer(){
             .handler   = index_handler,
             .user_ctx  = NULL
         };
+        httpd_uri_t status_uri = {
+            .uri       = "/status",
+            .method    = HTTP_GET,
+            .handler   = status_handler,
+            .user_ctx  = NULL
+        };
         httpd_uri_t stream_uri = {
             .uri       = "/stream",
             .method    = HTTP_GET,
@@ -148,6 +200,7 @@ void startCameraServer(){
             .user_ctx  = NULL
         };
         httpd_register_uri_handler(stream_httpd, &index_uri);
+        httpd_register_uri_handler(stream_httpd, &status_uri);
         httpd_register_uri_handler(stream_httpd, &stream_uri);
     }
 }
