@@ -20,31 +20,31 @@ Asynchronously parses incoming commands to adjust the steering servo, regulate m
 
 Streams a high-FPS, low-latency CIF-resolution MJPEG video feed directly to any connected smartphone or VR viewer.
 
-🛠️ Parts List
-Transmitter (Remote Control)
+### Parts List
 
-Part,                                              Quantity
-ESP32 Dev Module V1,                                   1
-10k Potentiometers,                                    2
-Push Buttons,                                          2
-18650 Li-ion Battery,                                  1
-TP4056 Charging Module,                                1
+#### Transmitter (Remote Control)
+| Part | Quantity |
+| :--- | :---: |
+| ESP32 Dev Module V1 | 1 |
+| 10k Potentiometers | 2 |
+| Push Buttons | 2 |
+| 18650 Li-ion Battery | 1 |
+| TP4056 Charging Module | 1 |
 
-Receiver (The RC Car)
-
-Part                                                ,Quantity
-ESP32-CAM (AI-Thinker module),                          1
-L298N Motor Driver,                                     1
-3V–9V High-Speed Motor,                                 1
-9g Servo Motor,                                         1
-White LEDs (Headlights),                                 2
-Red LEDs (Tail/Reverse Lights),                          2
-Custom 2S Battery Setup (2x 18650 Cells),                1
-TP4056 Charging Modules,                                 2
-1S BMS Units (Salvaged),                                  2
-4-Pin Female Connector,                                   1
-4-Pin Male Connectors,                                    2
-
+#### Receiver (The RC Car)
+| Part | Quantity |
+| :--- | :---: |
+| ESP32-CAM (AI-Thinker module) | 1 |
+| L298N Motor Driver | 1 |
+| 3V–9V High-Speed Motor | 1 |
+| 9g Servo Motor | 1 |
+| White LEDs (Headlights) | 2 |
+| Red LEDs (Tail/Reverse Lights) | 2 |
+| Custom 2S Battery Setup (2x 18650 Cells) | 1 |
+| TP4056 Charging Modules | 2 |
+| 1S BMS Units (Salvaged) | 2 |
+| 4-Pin Female Connector | 1 |
+| 4-Pin Male Connectors | 2 |
 🔌 Pin Connections
 Transmitter (ESP32)
 Steering Potentiometer Signal: GPIO 34
