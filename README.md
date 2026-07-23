@@ -86,3 +86,6 @@ Step 2: Connect and Configure
 1) Racing Mode: 100% throttle response, with restricted steering ($45^\circ$ to $135^\circ$) to prevent spin-outs during high-speed tracks.
 2) Drifting Mode (#UnleashedBeast): 100% throttle response and a full $0^\circ$ to $180^\circ$ steering sweep for maximum slide control and agility.
 3) Cruise Control / Beginner Mode: Capped at 35% throttle with cushioned steering limits ($70^\circ$ to $110^\circ$), perfect for learning the FPV layout safely or handing the controller to friends.
+
+### Digital Transmitter Schematic
+![Transmitter Schematic](transmitter_schematic.png)
