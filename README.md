@@ -88,4 +88,5 @@ Step 2: Connect and Configure
 3) Cruise Control / Beginner Mode: Capped at 35% throttle with cushioned steering limits ($70^\circ$ to $110^\circ$), perfect for learning the FPV layout safely or handing the controller to friends.
 
 ### Digital Transmitter Schematic
-![Transmitter Schematic](transmitter_schematic.png)
+<img width="907" height="510" alt="transmitter_schematic png" src="https://github.com/user-attachments/assets/fd3d7413-4a5d-40c9-a10a-e71392c1f70a" />
+
